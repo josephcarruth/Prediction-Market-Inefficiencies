@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arb Finder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f7f7f5;
+      --surface:  #ffffff;
+      --border:   #e4e4e0;
+      --border2:  #ccccc6;
+      --text:     #1a1a18;
+      --muted:    #6b6b66;
+      --hint:     #a0a09a;
+      --green:    #1D9E75;
+      --green-bg: #E1F5EE;
+      --green-tx: #0F6E56;
+      --blue-bg:  #E6F1FB;
+      --blue-tx:  #0C447C;
+      --purple-bg:#EEEDFE;
+      --purple-tx:#3C3489;
+      --amber-bg: #FAEEDA;
+      --amber-tx: #633806;
+      --red-bg:   #FCEBEB;
+      --red-tx:   #A32D2D;
+      --radius:   8px;
+      --radius-lg:12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:       #1a1a18;
+        --surface:  #242422;
+        --border:   #333330;
+        --border2:  #444440;
+        --text:     #f0f0ec;
+        --muted:    #9a9a94;
+        --hint:     #666660;
+        --green-bg: #0a2e20;
+        --green-tx: #5DCAA5;
+        --blue-bg:  #0a1e30;
+        --blue-tx:  #85B7EB;
+        --purple-bg:#18163a;
+        --purple-tx:#AFA9EC;
+        --amber-bg: #2a1e08;
+        --amber-tx: #FAC775;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .layout {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 0.5px solid var(--border);
+      padding: 1.25rem 0;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    header h1 { font-size: 18px; font-weight: 500; }
+    header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .status-pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 0.5px solid var(--border);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .status-pill.live { border-color: var(--green); color: var(--green); }
+    .pulse {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 5px;
+      animation: pulse 1.4s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+    #countdown { font-size: 11px; color: var(--hint); min-width: 60px; text-align: right; }
+    button.force-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    button.force-btn:hover { color: var(--text); border-color: var(--text); }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+    .stat {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+    .stat .lbl { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .stat .val { font-size: 20px; font-weight: 500; }
+    .stat .val.g { color: var(--green); }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filters label { font-size: 12px; color: var(--muted); }
+    .filters select, .filters input {
+      font-size: 12px;
+      padding: 5px 8px;
+      height: 30px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    /* ── Error banner ── */
+    .error-bar {
+      background: var(--red-bg);
+      border: 0.5px solid #F09595;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--red-tx);
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+    .error-bar.show { display: block; }
+
+    /* ── Cards ── */
+    .market-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .mcard {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .mcard:hover { border-color: var(--border2); }
+    .mcard.hot  { border-left: 3px solid var(--green); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+    .mcard.open { border-color: var(--border2); }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-info { flex: 1; min-width: 0; }
+    .card-info .title {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-info .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .card-right { text-align: right; white-space: nowrap; }
+    .card-right .gap-val { font-size: 17px; font-weight: 500; color: var(--green); }
+    .card-right .gap-lbl { font-size: 10px; color: var(--muted); }
+
+    /* badges */
+    .badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .b-cat    { background: var(--bg); color: var(--muted); border: 0.5px solid var(--border); }
+    .b-poly   { background: var(--blue-bg);   color: var(--blue-tx); }
+    .b-kal    { background: var(--purple-bg); color: var(--purple-tx); }
+    .b-hot    { background: var(--green-bg);  color: var(--green-tx); }
+
+    /* ── Detail panel ── */
+    .detail {
+      display: none;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 0.5px solid var(--border);
+    }
+    .detail.show { display: block; }
+
+    .platforms {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+    .platform-box {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+    .platform-box .pname { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+    .platform-box .prob  { font-size: 22px; font-weight: 500; }
+    .platform-box .impl  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    .strategy {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      margin-bottom: 1rem;
+    }
+    .strategy strong { font-weight: 500; color: var(--text); }
+
+    .size-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .size-row label { font-size: 12px; color: var(--muted); }
+    .size-row input {
+      width: 80px;
+      font-size: 12px;
+      padding: 4px 7px;
+      border: 0.5px solid var(--border2);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      height: 28px;
+    }
+    .profit-out { font-size: 13px; font-weight: 500; color: var(--green); }
+
+    .links { display: flex; gap: 10px; margin-top: 10px; }
+    .links a {
+      font-size: 11px;
+      color: var(--muted);
+      text-decoration: none;
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 3px 8px;
+    }
+    .links a:hover { color: var(--text); border-color: var(--border2); }
+
+    /* ── Similarity warning ── */
+    .sim-warn {
+      font-size: 11px;
+      color: var(--amber-tx);
+      background: var(--amber-bg);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      margin-top: 8px;
+    }
+
+    /* ── Empty / loading ── */
+    .empty {
+      text-align: center;
+      padding: 3rem 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── Scan log ── */
+    .log-section {
+      margin-top: 2rem;
+      border-top: 0.5px solid var(--border);
+      padding-top: 1rem;
+    }
+    .log-section h2 { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
+    .log-entry {
+      display: flex;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 3px 0;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .lt { color: var(--hint); white-space: nowrap; min-width: 55px; }
+    .log-entry.found .lm { color: var(--green); }
+
+    footer {
+      font-size: 10px;
+      color: var(--hint);
+      margin: 2rem 0 1.5rem;
+      padding-top: 1rem;
+      border-top: 0.5px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <header>
+    <div>
+      <h1>Prediction market arb finder</h1>
+      <p>Polymarket vs Kalshi — cross-platform mispricing scanner</p>
+    </div>
+    <div class="header-right">
+      <span class="status-pill" id="statusPill">Connecting...</span>
+      <span id="countdown"></span>
+      <button class="force-btn" onclick="forceScan()">Scan now</button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="lbl">Mispricings</div><div class="val g" id="sCount">—</div></div>
+    <div class="stat"><div class="lbl">Best net gap</div><div class="val g" id="sBest">—</div></div>
+    <div class="stat"><div class="lbl">Avg net gap</div><div class="val" id="sAvg">—</div></div>
+    <div class="stat"><div class="lbl">Markets scanned</div><div class="val" id="sMarkets">—</div></div>
+  </div>
+
+  <div class="filters">
+    <label>Category:</label>
+    <select id="catFilter" onchange="applyFilters()">
+      <option value="all">All categories</option>
+      <option value="politics">Politics</option>
+      <option value="sports">Sports</option>
+      <option value="economics">Economics</option>
+      <option value="crypto">Crypto & tech</option>
+      <option value="other">Other</option>
+    </select>
+    <label>Min net gap:</label>
+    <input type="number" id="minGap" value="2" min="0" max="20" step="0.5" style="width:60px" onchange="applyFilters()" />
+    <span style="font-size:12px;color:var(--muted)">%</span>
+    <label style="margin-left:8px">Sort:</label>
+    <select id="sortBy" onchange="applyFilters()">
+      <option value="gap">Largest gap</option>
+      <option value="volume">Highest volume</option>
+      <option value="cat">Category</option>
+    </select>
+  </div>
+
+  <div class="error-bar" id="errorBar"></div>
+
+  <div class="market-list" id="marketList">
+    <div class="empty">Waiting for first scan...</div>
+  </div>
+
+  <div class="log-section">
+    <h2>Scan log</h2>
+    <div id="logEntries"></div>
+  </div>
+
+  <footer>
+    For educational and informational purposes only. Always verify resolution criteria match before entering a position. Polymarket is a decentralised exchange on Polygon. Kalshi is CFTC-regulated.
+  </footer>
+
+</div>
+<script>
+  const API = 'http://localhost:8000';
+  const POLL_INTERVAL = 60;
+
+  let allMispricings = [];
+  let expanded = new Set();
+  let logLines = [];
+  let countdown = POLL_INTERVAL;
+  let pollTimer = null;
+  let countdownTimer = null;
+  let scanning = false;
+
+  // ── Fetch ──────────────────────────────────────────────
+  async function fetchScan(forceNow = false) {
+    if (scanning) return;
+    scanning = true;
+    try {
+      const endpoint = forceNow ? '/api/scan/now' : '/api/scan';
+      const res = await fetch(API + endpoint);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      handleData(data);
+      hideError();
+    } catch (e) {
+      showError(`Cannot reach backend: ${e.message}. Make sure uvicorn is running on port 8000.`);
+      addLog('Scan failed — backend unreachable', false);
+    } finally {
+      scanning = false;
+    }
+  }
+
+  function forceScan() {
+    resetCountdown();
+    fetchScan(true);
+  }
+
+  // ── Data handling ──────────────────────────────────────
+  function handleData(data) {
+    allMispricings = data.mispricings || [];
+    const time = data.scan_time
+      ? new Date(data.scan_time * 1000).toLocaleTimeString()
+      : '—';
+
+    const found = allMispricings.length;
+    addLog(
+      `Scan complete — ${data.poly_count || 0} Poly, ${data.kal_count || 0} Kalshi, ${found} mispricing${found !== 1 ? 's' : ''} found`,
+      found > 0
+    );
+
+    setStatus(true, time);
+    applyFilters();
+  }
+
+  // ── Filters & render ───────────────────────────────────
+  function applyFilters() {
+    const cat = document.getElementById('catFilter').value;
+    const minGap = parseFloat(document.getElementById('minGap').value) / 100 || 0;
+    const sort = document.getElementById('sortBy').value;
+
+    let list = allMispricings.filter(m =>
+      m.net_gap >= minGap && (cat === 'all' || m.category === cat)
+    );
+
+    if (sort === 'volume') list.sort((a, b) => (b.poly_volume + b.kal_volume) - (a.poly_volume + a.kal_volume));
+    else if (sort === 'cat') list.sort((a, b) => a.category.localeCompare(b.category));
+    else list.sort((a, b) => b.net_gap - a.net_gap);
+
+    updateStats(list);
+    renderList(list);
+  }
+
+  function updateStats(list) {
+    document.getElementById('sCount').textContent = list.length;
+    if (list.length) {
+      const gaps = list.map(m => m.net_gap);
+      document.getElementById('sBest').textContent = (Math.max(...gaps) * 100).toFixed(1) + '%';
+      document.getElementById('sAvg').textContent  = (gaps.reduce((a, b) => a + b, 0) / gaps.length * 100).toFixed(1) + '%';
+    } else {
+      document.getElementById('sBest').textContent = '—';
+      document.getElementById('sAvg').textContent  = '—';
+    }
+    // total markets from last full scan
+    const el = document.getElementById('sMarkets');
+    el.textContent = el.textContent === '—' ? '—' : el.textContent; // preserve until data arrives
+  }
+
+  function renderList(list) {
+    const el = document.getElementById('marketList');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty">No mispricings match your current filters.</div>';
+      return;
+    }
+    el.innerHTML = list.map(m => cardHTML(m)).join('');
+  }
+
+  function cardHTML(m) {
+    const gapPct = (m.net_gap * 100).toFixed(1);
+    const rawPct = (m.gap * 100).toFixed(1);
+    const isHot  = m.net_gap >= 0.05;
+    const isOpen = expanded.has(m.poly_id);
+    const buyPlatform  = m.buy_platform;
+    const sellPlatform = m.sell_platform;
+    const polyPct = (m.poly_yes * 100).toFixed(0);
+    const kalPct  = (m.kal_yes  * 100).toFixed(0);
+    const simWarn = m.similarity < 0.70;
+    const volStr  = `Poly $${fmtVol(m.poly_volume)} · Kalshi $${fmtVol(m.kal_volume)}`;
+    const defaultStake = 500;
+    const estProfit = ((m.sell_price - m.buy_price) * defaultStake).toFixed(2);
+
+    return `
+    <div class="mcard ${isHot ? 'hot' : ''} ${isOpen ? 'open' : ''}"
+         onclick="toggleCard('${m.poly_id}')">
+      <div class="card-top">
+        <span class="badge b-cat">${m.category}</span>
+        ${isHot ? '<span class="badge b-hot">hot</span>' : ''}
+        <div class="card-info">
+          <div class="title" title="${escHtml(m.title)}">${escHtml(m.title)}</div>
+          <div class="sub">${volStr} · similarity ${(m.similarity * 100).toFixed(0)}%</div>
+        </div>
+        <div class="card-right">
+          <div class="gap-val">+${gapPct}%</div>
+          <div class="gap-lbl">net gap</div>
+        </div>
+      </div>
+
+      <div class="detail ${isOpen ? 'show' : ''}" id="det-${m.poly_id}">
+        <div class="platforms">
+          <div class="platform-box">
+            <div class="pname"><span class="badge b-poly">Polymarket</span></div>
+            <div class="prob">${polyPct}¢</div>
+            <div class="impl">Implied prob: ${polyPct}%</div>
+          </div>
+          <div class="platform-box">
+            <div class="pname"><span class="badge b-kal">Kalshi</span></div>
+            <div class="prob">${kalPct}¢</div>
+            <div class="impl">Implied prob: ${kalPct}%</div>
+          </div>
+        </div>
+
+        <div class="strategy">
+          <strong>Strategy:</strong> Buy YES on <strong>${buyPlatform}</strong>
+          at ${(m.buy_price * 100).toFixed(0)}¢ &rarr; Sell YES on
+          <strong>${sellPlatform}</strong> at ${(m.sell_price * 100).toFixed(0)}¢.
+          Raw gap ${rawPct}% minus ~2% fees = <strong>${gapPct}% net</strong>.
+          ${simWarn ? 'Lower similarity — double-check the resolution criteria match before entering.' : ''}
+        </div>
+
+        <div class="size-row">
+          <label>Position size: $</label>
+          <input type="number" value="${defaultStake}" min="10" step="10"
+            id="sz-${m.poly_id}"
+            onclick="event.stopPropagation()"
+            oninput="updateProfit('${m.poly_id}', ${m.buy_price}, ${m.sell_price})" />
+          <span class="profit-out" id="po-${m.poly_id}">Est. profit: $${estProfit}</span>
+        </div>
+
+        <div class="links">
+          <a href="${escHtml(m.poly_url)}" target="_blank" onclick="event.stopPropagation()">View on Polymarket &rarr;</a>
+          <a href="${escHtml(m.kal_url)}"  target="_blank" onclick="event.stopPropagation()">View on Kalshi &rarr;</a>
+        </div>
+
+        ${simWarn ? `<div class="sim-warn">Low match confidence (${(m.similarity*100).toFixed(0)}%). Verify both markets resolve on the same event before trading.</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function toggleCard(id) {
+    expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+    applyFilters();
+  }
+
+  function updateProfit(id, buy, sell) {
+    const sz = parseFloat(document.getElementById('sz-' + id)?.value) || 0;
+    const el = document.getElementById('po-' + id);
+    if (el) el.textContent = `Est. profit: $${((sell - buy) * sz).toFixed(2)}`;
+  }
+
+  // ── Status & log ───────────────────────────────────────
+  function setStatus(live, time) {
+    const pill = document.getElementById('statusPill');
+    if (live) {
+      pill.className = 'status-pill live';
+      pill.innerHTML = `<span class="pulse"></span>Live · ${time}`;
+    } else {
+      pill.className = 'status-pill';
+      pill.textContent = 'Connecting...';
+    }
+    document.getElementById('sMarkets').textContent =
+      allMispricings.length > 0 ? document.getElementById('sMarkets').textContent : '—';
+  }
+
+  function addLog(msg, found = false) {
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    logLines.unshift({ t, msg, found });
+    if (logLines.length > 30) logLines.pop();
+    document.getElementById('logEntries').innerHTML = logLines
+      .map(l => `<div class="log-entry ${l.found ? 'found' : ''}"><span class="lt">${l.t}</span><span class="lm">${escHtml(l.msg)}</span></div>`)
+      .join('');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorBar');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+  function hideError() { document.getElementById('errorBar').classList.remove('show'); }
+
+  // ── Countdown ──────────────────────────────────────────
+  function resetCountdown() {
+    countdown = POLL_INTERVAL;
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      fetchScan();
+      countdown = POLL_INTERVAL;
+    }, POLL_INTERVAL * 1000);
+  }
+
+  function startCountdownDisplay() {
+    countdownTimer = setInterval(() => {
+      countdown = Math.max(0, countdown - 1);
+      document.getElementById('countdown').textContent =
+        countdown > 0 ? `next scan in ${countdown}s` : 'scanning...';
+    }, 1000);
+  }
+
+  // ── Helpers ────────────────────────────────────────────
+  function fmtVol(n) {
+    if (!n || n === 0) return '—';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K';
+    return n.toFixed(0);
+  }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Boot ───────────────────────────────────────────────
+  addLog('Dashboard loaded — connecting to backend...');
+  fetchScan();
+  resetCountdown();
+  startCountdownDisplay();
+</script>
+</body>
+</html>
